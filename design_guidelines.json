@@ -1,0 +1,109 @@
+{
+  "theme": "light",
+  "archetype": "4_swiss_high_contrast",
+  "typography": {
+    "headings": {
+      "font_family": "Cabinet Grotesk",
+      "weights": ["light", "bold", "black"],
+      "usage": "Use for marketing hero, empty state titles, and massive section headers. Apply tracking-tighter."
+    },
+    "body": {
+      "font_family": "IBM Plex Sans",
+      "weights": ["regular", "medium", "semibold"],
+      "usage": "Standard UI text, chat messages, button labels."
+    },
+    "monospace": {
+      "font_family": "JetBrains Mono",
+      "weights": ["regular", "medium"],
+      "usage": "Code blocks, data extraction values, tags, timestamps."
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed text-zinc-900",
+      "small_caps": "text-xs uppercase tracking-[0.2em] font-bold text-zinc-500"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F4F4F5",
+      "tertiary": "#E4E4E7"
+    },
+    "text": {
+      "primary": "#09090B",
+      "secondary": "#52525B",
+      "inverse": "#FFFFFF"
+    },
+    "accents": {
+      "primary": "#002FA7",
+      "primary_hover": "#00227A",
+      "danger": "#FF3B30",
+      "danger_hover": "#D62B22",
+      "warning": "#FFD60A"
+    },
+    "borders": {
+      "default": "#E4E4E7",
+      "focus": "#002FA7",
+      "technical": "#D4D4D8"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Grid Borders (The 'Technical' Look). Expose the skeleton. The grid must be visible.",
+    "global_layout": "F-pattern architecture. Collapsible left-sidebar for Projects/Sessions. Center is the Multi-tab Chat canvas. Right panel is the Context Extraction / Timeline Dashboard.",
+    "spacing_scale": "p-1, p-2, p-4, p-6, p-8, p-12",
+    "border_radius": "rounded-none or rounded-sm (max 4px). UI should feel rigid, objective, and functional."
+  },
+  "components": {
+    "buttons": "Flat, sharp edges. Primary uses International Klein Blue. Hover states must change bg color and maintain inverse text contrast. Always include data-testid.",
+    "cards": "border border-zinc-200 bg-white p-6 shadow-none. Never use soft shadows. For hover, add a sharp 4px translate-y and a hard block shadow (e.g., shadow-[4px_4px_0px_#002FA7]).",
+    "chat_bubbles": "User: solid grey (bg-zinc-100) or brand tint with crisp edges. AI: stark white with border-l-2 border-primary. Avatars should be rigid squares.",
+    "tabs": "Technical tabs. border-b border-zinc-200. Active tab has border-t-2 border-primary and border-x border-zinc-200 bg-white. No pill-shaped tabs.",
+    "model_selector": "Shadcn Select. Crisp, rigid dropdowns with hover states maintaining contrast.",
+    "extraction_panel": "Dense bento grid layout mode B (Control Room Grid). Tight gap-4. Every pixel utilized. Use monospace for extracted code/data.",
+    "form_elements": "Use Shadcn/UI heavily customized to be flat, rectangular, with 1px border. Focus rings must use the accent color."
+  },
+  "motion": {
+    "philosophy": "Minimalist, snappy. No bouncy springs.",
+    "hover": "Instant color swaps or sharp architectural translates (e.g., -translate-y-1).",
+    "transitions": "transition-colors duration-200 ease-in-out"
+  },
+  "media": {
+    "icons": {
+      "library": "@phosphor-icons/react",
+      "style": "duotone or regular, technical and dense."
+    },
+    "images": [
+      {
+        "category": "empty_state_hero",
+        "url": "https://static.prod-images.emergentagent.com/jobs/0b20ac83-8bf3-41e2-9681-b9982fc0938f/images/c63d752a8c936e5fbb340f13cd38dd5ee15f80c720b1f04dced535d6d942f215.png",
+        "description": "Minimalist Swiss design AI network concept for new session empty state."
+      },
+      {
+        "category": "data_extraction_bg",
+        "url": "https://static.prod-images.emergentagent.com/jobs/0b20ac83-8bf3-41e2-9681-b9982fc0938f/images/271684635b5079e0a4a445122955bd46a19afe775968e2e33bbe2594e26a3017.png",
+        "description": "Abstract black and white brutalist UI elements for the context/extraction timeline background header."
+      },
+      {
+        "category": "abstract_pattern",
+        "url": "https://images.unsplash.com/photo-1626123080782-10b336a160b4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMGdlb21ldHJpYyUyMHBhdHRlcm58ZW58MHx8fHwxNzc1MTI2NTU3fDA&ixlib=rb-4.1.0&q=85",
+        "description": "White and black diamond pattern for sidebar decorative footer."
+      }
+    ]
+  },
+  "accessibility": {
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case format (e.g., data-testid='model-selector-dropdown').",
+    "contrast": "Ensure minimum 4.5:1 ratio for text. Active buttons must have high contrast. Focus states must have higher contrast than default."
+  },
+  "instructions_to_main_agent": [
+    "Install fonts: Cabinet Grotesk, IBM Plex Sans, JetBrains Mono.",
+    "Install @phosphor-icons/react using yarn add @phosphor-icons/react.",
+    "Implement the layout with strict technical grid borders (border-collapse style). Add 1px borders around major sections.",
+    "Do NOT use generous border-radius. Max rounded-sm (4px) or rounded-none. Override shadcn components to remove border-radius.",
+    "Chat Area: Use Shadcn Tabs to implement multi-tab chats. Each tab should have its own Shadcn Select for the Model Selector.",
+    "Right Panel: Implement the 'Context Timeline Dashboard' here. Use dense bento grid components. This area tracks decisions, code, and extractions across models.",
+    "Ensure 'Extract Insights' button is prominent, uses the Primary Accent Color (#002FA7), and is fully flat.",
+    "Do NOT add authentication. Ensure the system works seamlessly for a single user/local user session."
+  ]
+}
