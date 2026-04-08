@@ -28,6 +28,8 @@ A unified AI workspace where users chat with multiple AI models (GPT 5.2, GPT-4o
 - [x] Full backend API (projects CRUD, sessions CRUD, chat, messages, extraction, intelligence, context injection)
 - [x] 5 AI models integrated (GPT 5.2, GPT-4o, Claude Sonnet 4.5, Claude Opus 4.5, Gemini 3 Flash)
 - [x] Tab-based chat interface with model info bar
+- [x] **SSE message streaming** — AI responses stream word-by-word in real-time via Server-Sent Events
+- [x] Streaming cursor (blinking blue bar) during response generation
 - [x] Auto-extraction every 4 messages + manual "Extract Insights"
 - [x] Context Panel with search, type filters (decision, code, architecture, todo, question)
 - [x] Context injection dialog (load intelligence from other sessions)
