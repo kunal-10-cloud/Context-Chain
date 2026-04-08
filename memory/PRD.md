@@ -34,6 +34,8 @@ A unified AI workspace where users chat with multiple AI models (GPT 5.2, GPT-4o
 - [x] Context Panel with search, type filters (decision, code, architecture, todo, question)
 - [x] Context injection dialog (load intelligence from other sessions)
 - [x] Swiss high-contrast design (Cabinet Grotesk, IBM Plex Sans, JetBrains Mono)
+- [x] **Keyboard shortcuts**: Cmd/Ctrl+N new session, Cmd/Ctrl+W close tab, Cmd/Ctrl+E extract insights, Cmd/Ctrl+B toggle sidebar, Cmd/Ctrl+Shift+I toggle context panel
+- [x] **Multi-line textarea** with Enter to send, Shift+Enter for newline, auto-expanding height
 - [x] Project creation/deletion, session creation/deletion
 - [x] Markdown rendering in AI responses
 
