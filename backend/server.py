@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -10,6 +11,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import json
+import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -166,7 +168,7 @@ async def get_messages(session_id: str):
     ).sort("created_at", 1).to_list(1000)
     return messages
 
-# --- Chat ---
+# --- Chat (non-streaming fallback) ---
 @api_router.post("/chat")
 async def chat(data: ChatRequest, background_tasks: BackgroundTasks):
     session = await db.sessions.find_one({"id": data.session_id}, {"_id": 0})
@@ -194,24 +196,7 @@ async def chat(data: ChatRequest, background_tasks: BackgroundTasks):
     await db.messages.insert_one(user_msg)
     user_msg.pop("_id", None)
 
-    # Build conversation history for context
-    history = await db.messages.find(
-        {"session_id": data.session_id}, {"_id": 0}
-    ).sort("created_at", 1).to_list(50)
-
-    # System message
-    system_msg = f"You are a helpful AI assistant ({model_key}). Provide clear, well-structured responses. Use markdown formatting when appropriate."
-    if session.get("context_injected"):
-        system_msg += f"\n\nContext from previous sessions:\n{session['context_injected']}"
-
-    # Build conversation as text for context (exclude the latest message we just saved)
-    conv_parts = []
-    for msg in history[:-1]:
-        role = "User" if msg["role"] == "user" else "Assistant"
-        conv_parts.append(f"{role}: {msg['content']}")
-
-    if conv_parts:
-        system_msg += "\n\nPrevious conversation:\n" + "\n\n".join(conv_parts)
+    system_msg, _ = await _build_chat_context(data.session_id, session)
 
     try:
         llm = LlmChat(
@@ -222,7 +207,6 @@ async def chat(data: ChatRequest, background_tasks: BackgroundTasks):
 
         response = await llm.send_message(UserMessage(text=data.content))
 
-        # Save assistant message
         assistant_msg = {
             "id": str(uuid.uuid4()),
             "session_id": data.session_id,
@@ -235,14 +219,12 @@ async def chat(data: ChatRequest, background_tasks: BackgroundTasks):
         await db.messages.insert_one(assistant_msg)
         assistant_msg.pop("_id", None)
 
-        # Update session
         count = await db.messages.count_documents({"session_id": data.session_id})
         await db.sessions.update_one(
             {"id": data.session_id},
             {"$set": {"message_count": count, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
 
-        # Auto-extract every 4 messages
         if count >= 4 and count % 4 == 0:
             background_tasks.add_task(run_extraction, data.session_id)
 
@@ -251,6 +233,130 @@ async def chat(data: ChatRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error(f"Chat error with {model_key}: {e}")
         raise HTTPException(status_code=500, detail=f"AI model error: {str(e)}")
+
+
+async def _build_chat_context(session_id: str, session: dict):
+    """Build system message with conversation history and injected context."""
+    history = await db.messages.find(
+        {"session_id": session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+
+    model_key = session["model"]
+    system_msg = f"You are a helpful AI assistant ({model_key}). Provide clear, well-structured responses. Use markdown formatting when appropriate."
+    if session.get("context_injected"):
+        system_msg += f"\n\nContext from previous sessions:\n{session['context_injected']}"
+
+    conv_parts = []
+    for msg in history[:-1]:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        conv_parts.append(f"{role}: {msg['content']}")
+
+    if conv_parts:
+        system_msg += "\n\nPrevious conversation:\n" + "\n\n".join(conv_parts)
+
+    return system_msg, history
+
+
+# --- Chat Streaming (SSE) ---
+@api_router.post("/chat/stream")
+async def chat_stream(data: ChatRequest):
+    """SSE streaming chat endpoint. Streams AI response word-by-word."""
+    session = await db.sessions.find_one({"id": data.session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    model_key = session["model"]
+    if model_key not in MODEL_MAP:
+        raise HTTPException(status_code=400, detail=f"Invalid model: {model_key}")
+
+    provider, model_name = MODEL_MAP[model_key]
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+
+    # Save user message
+    now = datetime.now(timezone.utc).isoformat()
+    user_msg_id = str(uuid.uuid4())
+    user_msg = {
+        "id": user_msg_id,
+        "session_id": data.session_id,
+        "project_id": session["project_id"],
+        "role": "user",
+        "content": data.content,
+        "model": model_key,
+        "created_at": now,
+    }
+    await db.messages.insert_one(user_msg)
+
+    system_msg, _ = await _build_chat_context(data.session_id, session)
+
+    assistant_msg_id = str(uuid.uuid4())
+
+    async def event_generator():
+        try:
+            # Send start event with message ID
+            yield f"data: {json.dumps({'type': 'start', 'message_id': assistant_msg_id})}\n\n"
+
+            # Call the AI model
+            llm = LlmChat(
+                api_key=api_key,
+                session_id=str(uuid.uuid4()),
+                system_message=system_msg,
+            ).with_model(provider, model_name)
+
+            response = await llm.send_message(UserMessage(text=data.content))
+
+            # Stream response in chunks (word-by-word with grouping for speed)
+            words = response.split(' ')
+            chunk_size = 3  # Send 3 words at a time for smooth streaming
+            for i in range(0, len(words), chunk_size):
+                chunk = ' '.join(words[i:i + chunk_size])
+                # Add space prefix except for first chunk
+                if i > 0:
+                    chunk = ' ' + chunk
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                await asyncio.sleep(0.02)  # 20ms between chunks for typewriter feel
+
+            # Save complete assistant message to DB
+            assistant_msg = {
+                "id": assistant_msg_id,
+                "session_id": data.session_id,
+                "project_id": session["project_id"],
+                "role": "assistant",
+                "content": response,
+                "model": model_key,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.messages.insert_one(assistant_msg)
+
+            # Update session message count
+            count = await db.messages.count_documents({"session_id": data.session_id})
+            await db.sessions.update_one(
+                {"id": data.session_id},
+                {"$set": {"message_count": count, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
+            # Auto-extract every 4 messages
+            should_extract = count >= 4 and count % 4 == 0
+
+            # Send done event
+            yield f"data: {json.dumps({'type': 'done', 'message_id': assistant_msg_id, 'should_extract': should_extract})}\n\n"
+
+            # Run extraction if needed
+            if should_extract:
+                await run_extraction(data.session_id)
+
+        except Exception as e:
+            logger.error(f"Stream chat error with {model_key}: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # --- Intelligence Extraction ---
 async def run_extraction(session_id: str):

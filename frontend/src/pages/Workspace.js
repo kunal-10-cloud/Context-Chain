@@ -6,7 +6,7 @@ import ContextPanel from "@/components/ContextPanel";
 import {
   fetchProjects, createProject, deleteProject,
   fetchSessions, createSession, deleteSession,
-  fetchMessages, sendMessage,
+  fetchMessages, sendMessageStream,
   extractInsights, fetchIntelligence,
   getAvailableContext, injectContext,
 } from "@/hooks/useApi";
@@ -174,48 +174,100 @@ export default function Workspace() {
     });
   };
 
+  const streamControllerRef = useRef(null);
+
   const handleSendMessage = async (content) => {
     if (!activeTabId || loadingChat) return;
 
     const tab = openTabs.find(t => t.sessionId === activeTabId);
     if (!tab) return;
 
+    const currentTabId = activeTabId;
+
     // Optimistic user message
     const userMsg = {
       id: `temp-${Date.now()}`,
-      session_id: activeTabId,
+      session_id: currentTabId,
       role: "user",
       content,
       model: tab.model,
       created_at: new Date().toISOString(),
     };
 
+    // Placeholder assistant message for streaming
+    const streamingMsgId = `streaming-${Date.now()}`;
+    const streamingMsg = {
+      id: streamingMsgId,
+      session_id: currentTabId,
+      role: "assistant",
+      content: "",
+      model: tab.model,
+      created_at: new Date().toISOString(),
+      isStreaming: true,
+    };
+
     setMessagesCache(prev => ({
       ...prev,
-      [activeTabId]: [...(prev[activeTabId] || []), userMsg],
+      [currentTabId]: [...(prev[currentTabId] || []), userMsg, streamingMsg],
     }));
 
     setLoadingChat(true);
-    try {
-      const data = await sendMessage(activeTabId, content);
-      // Replace temp message and add assistant response
-      setMessagesCache(prev => {
-        const msgs = (prev[activeTabId] || []).filter(m => m.id !== userMsg.id);
-        return {
+    let finalMessageId = null;
+
+    streamControllerRef.current = sendMessageStream(
+      currentTabId,
+      content,
+      // onChunk
+      (chunk, messageId) => {
+        if (messageId && !chunk) {
+          // start event - store the real message ID
+          finalMessageId = messageId;
+          return;
+        }
+        setMessagesCache(prev => {
+          const msgs = prev[currentTabId] || [];
+          return {
+            ...prev,
+            [currentTabId]: msgs.map(m =>
+              m.id === streamingMsgId
+                ? { ...m, content: m.content + chunk }
+                : m
+            ),
+          };
+        });
+      },
+      // onDone
+      (messageId) => {
+        // Finalize: replace temp IDs with real ones and mark as not streaming
+        setMessagesCache(prev => {
+          const msgs = (prev[currentTabId] || []).map(m => {
+            if (m.id === streamingMsgId) {
+              return { ...m, id: messageId || finalMessageId || streamingMsgId, isStreaming: false };
+            }
+            if (m.id === userMsg.id) {
+              return { ...m, id: m.id.replace('temp-', 'usr-') };
+            }
+            return m;
+          });
+          return { ...prev, [currentTabId]: msgs };
+        });
+        setLoadingChat(false);
+        streamControllerRef.current = null;
+      },
+      // onError
+      (errorMsg) => {
+        toast.error(errorMsg || "Failed to send message");
+        // Remove streaming message on error
+        setMessagesCache(prev => ({
           ...prev,
-          [activeTabId]: [...msgs, { ...userMsg, id: userMsg.id.replace('temp-', 'usr-') }, data.message],
-        };
-      });
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to send message");
-      // Remove optimistic message
-      setMessagesCache(prev => ({
-        ...prev,
-        [activeTabId]: (prev[activeTabId] || []).filter(m => m.id !== userMsg.id),
-      }));
-    } finally {
-      setLoadingChat(false);
-    }
+          [currentTabId]: (prev[currentTabId] || []).filter(
+            m => m.id !== streamingMsgId
+          ),
+        }));
+        setLoadingChat(false);
+        streamControllerRef.current = null;
+      }
+    );
   };
 
   const handleExtractInsights = async () => {

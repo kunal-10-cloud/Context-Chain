@@ -27,6 +27,64 @@ export const fetchMessages = (sessionId) =>
 export const sendMessage = (sessionId, content) =>
   api.post("/chat", { session_id: sessionId, content }).then(r => r.data);
 
+// Chat Streaming (SSE)
+export const sendMessageStream = (sessionId, content, onChunk, onDone, onError) => {
+  const controller = new AbortController();
+
+  fetch(`${API}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, content }),
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: "Stream failed" }));
+        onError(err.detail || "Stream failed");
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "chunk") {
+                onChunk(event.content);
+              } else if (event.type === "done") {
+                onDone(event.message_id);
+              } else if (event.type === "error") {
+                onError(event.detail);
+              } else if (event.type === "start") {
+                onChunk("", event.message_id); // signal start with message_id
+              }
+            } catch (e) {
+              // skip malformed events
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError(err.message || "Stream connection failed");
+      }
+    });
+
+  return controller; // caller can abort
+};
+
 // Intelligence
 export const extractInsights = (sessionId) =>
   api.post(`/sessions/${sessionId}/extract`).then(r => r.data);

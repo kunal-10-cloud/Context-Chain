@@ -205,7 +205,7 @@ export default function ChatArea({
                 <ChatMessage key={msg.id} message={msg} modelInfo={MODEL_INFO[msg.model]} />
               ))
             )}
-            {loadingChat && (
+            {loadingChat && !messages.some(m => m.isStreaming && m.content) && (
               <div className="flex items-start gap-3 p-3" data-testid="loading-indicator">
                 <div
                   className="w-7 h-7 flex items-center justify-center text-white text-xs font-bold shrink-0"

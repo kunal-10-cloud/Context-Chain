@@ -157,7 +157,7 @@ class ContextHubAPITester:
         return False
 
     def test_send_chat_message(self):
-        """Test sending a chat message"""
+        """Test sending a chat message (non-streaming fallback)"""
         if not self.session_id:
             print("❌ No session ID available for chat")
             return False
@@ -167,7 +167,7 @@ class ContextHubAPITester:
             "content": "Hello! This is a test message. Please respond briefly."
         }
         success, response = self.run_test(
-            "Send Chat Message",
+            "Send Chat Message (Non-streaming)",
             "POST",
             "chat",
             200,
@@ -178,6 +178,86 @@ class ContextHubAPITester:
             print(f"   AI Response: {message.get('content', '')[:100]}...")
             return True
         return False
+
+    def test_send_chat_stream(self):
+        """Test SSE streaming chat endpoint"""
+        if not self.session_id:
+            print("❌ No session ID available for streaming chat")
+            return False
+            
+        url = f"{self.base_url}/api/chat/stream"
+        headers = {'Content-Type': 'application/json'}
+        test_data = {
+            "session_id": self.session_id,
+            "content": "Tell me a short joke. Keep it brief."
+        }
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing SSE Chat Streaming...")
+        print(f"   URL: {url}")
+        
+        try:
+            import sseclient  # For SSE parsing
+        except ImportError:
+            # Fallback to manual parsing
+            pass
+            
+        try:
+            response = requests.post(url, json=test_data, headers=headers, stream=True, timeout=60)
+            
+            if response.status_code != 200:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                return False
+                
+            # Parse SSE events
+            events_received = []
+            content_chunks = []
+            
+            for line in response.iter_lines(decode_unicode=True):
+                if line.startswith('data: '):
+                    try:
+                        event_data = json.loads(line[6:])  # Remove 'data: ' prefix
+                        events_received.append(event_data['type'])
+                        
+                        if event_data['type'] == 'start':
+                            print(f"   📡 Stream started with message ID: {event_data.get('message_id', 'N/A')}")
+                        elif event_data['type'] == 'chunk':
+                            content_chunks.append(event_data['content'])
+                            print(f"   📝 Chunk: '{event_data['content']}'")
+                        elif event_data['type'] == 'done':
+                            print(f"   ✅ Stream completed with message ID: {event_data.get('message_id', 'N/A')}")
+                            break
+                        elif event_data['type'] == 'error':
+                            print(f"   ❌ Stream error: {event_data.get('detail', 'Unknown error')}")
+                            return False
+                            
+                    except json.JSONDecodeError:
+                        continue  # Skip malformed events
+                        
+            # Validate streaming behavior
+            full_content = ''.join(content_chunks)
+            expected_events = ['start', 'chunk', 'done']
+            
+            success = (
+                'start' in events_received and 
+                'chunk' in events_received and 
+                'done' in events_received and
+                len(content_chunks) > 0 and
+                len(full_content.strip()) > 0
+            )
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Received {len(content_chunks)} chunks")
+                print(f"   Full response: {full_content[:100]}...")
+                return True
+            else:
+                print(f"❌ Failed - Events: {events_received}, Chunks: {len(content_chunks)}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            return False
 
     def test_get_messages(self):
         """Test getting session messages"""
@@ -245,7 +325,8 @@ def main():
         ("List Projects", tester.test_list_projects),
         ("Create Session", tester.test_create_session),
         ("List Sessions", tester.test_list_sessions),
-        ("Send Chat Message", tester.test_send_chat_message),
+        ("Send Chat Message (Non-streaming)", tester.test_send_chat_message),
+        ("SSE Chat Streaming", tester.test_send_chat_stream),
         ("Get Messages", tester.test_get_messages),
         ("Extract Intelligence", tester.test_extract_intelligence),
         ("Get Intelligence", tester.test_get_intelligence),

@@ -36,11 +36,16 @@ export default function ChatMessage({ message, modelInfo }) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>
+            {message.isStreaming && (
+              <span className="inline-block w-1.5 h-4 bg-[#002FA7] ml-0.5 animate-pulse align-text-bottom" />
+            )}
           </div>
         )}
-        <span className="font-mono text-[10px] text-zinc-400 mt-1.5 block">
-          {new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+        {!message.isStreaming && (
+          <span className="font-mono text-[10px] text-zinc-400 mt-1.5 block">
+            {new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
       </div>
     </div>
   );
