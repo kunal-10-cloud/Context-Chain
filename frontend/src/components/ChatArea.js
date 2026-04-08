@@ -39,6 +39,14 @@ export default function ChatArea({
     setInput("");
   };
 
+  const handleKeyDown = (e) => {
+    // Enter sends, Shift+Enter = newline, Cmd/Ctrl+Enter also sends
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
   const modelInfo = activeTab ? MODEL_INFO[activeTab.model] : null;
 
   // Empty state
@@ -230,25 +238,45 @@ export default function ChatArea({
           className="border-t border-zinc-200 p-3 bg-white"
           data-testid="chat-input-form"
         >
-          <div className="flex gap-2">
-            <input
+          <div className="flex gap-2 items-end">
+            <textarea
               ref={inputRef}
               data-testid="chat-input"
-              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={`Message ${modelInfo?.name || "AI"}...`}
-              className="flex-1 border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#002FA7] transition-colors bg-white"
+              onKeyDown={handleKeyDown}
+              placeholder={`Message ${modelInfo?.name || "AI"}...  (Enter to send, Shift+Enter for newline)`}
+              className="flex-1 border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#002FA7] transition-colors bg-white resize-none min-h-[38px] max-h-[120px]"
               disabled={loadingChat}
+              rows={1}
+              style={{ height: "auto", overflow: "hidden" }}
+              onInput={(e) => {
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+              }}
             />
             <button
               data-testid="send-message-btn"
               type="submit"
               disabled={loadingChat || !input.trim()}
-              className="bg-[#002FA7] text-white px-4 py-2 text-sm font-medium hover:bg-[#00227A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              className="bg-[#002FA7] text-white px-4 py-2 text-sm font-medium hover:bg-[#00227A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 h-[38px]"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 px-0.5">
+            <span className="font-mono text-[10px] text-zinc-400" data-testid="shortcut-hint-send">
+              Enter to send
+            </span>
+            <span className="font-mono text-[10px] text-zinc-400" data-testid="shortcut-hint-newline">
+              Shift+Enter newline
+            </span>
+            <span className="font-mono text-[10px] text-zinc-400" data-testid="shortcut-hint-new-session">
+              {navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl+"}N new session
+            </span>
+            <span className="font-mono text-[10px] text-zinc-400" data-testid="shortcut-hint-close-tab">
+              {navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl+"}W close tab
+            </span>
           </div>
         </form>
 

@@ -298,6 +298,56 @@ export default function Workspace() {
   const activeMessages = messagesCache[activeTabId] || [];
   const activeTab = openTabs.find(t => t.sessionId === activeTabId);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+
+      // Cmd+N — New session (default model gpt-5.2)
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        if (activeProjectId) handleCreateSession("gpt-5.2");
+        return;
+      }
+
+      // Cmd+W — Close active tab
+      if (e.key === "w" || e.key === "W") {
+        if (activeTabId) {
+          e.preventDefault();
+          closeTab(activeTabId);
+        }
+        return;
+      }
+
+      // Cmd+E — Extract insights from active session
+      if (e.key === "e" || e.key === "E") {
+        if (activeTabId && !extracting) {
+          e.preventDefault();
+          handleExtractInsights();
+        }
+        return;
+      }
+
+      // Cmd+B — Toggle sidebar
+      if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        setSidebarCollapsed(prev => !prev);
+        return;
+      }
+
+      // Cmd+Shift+I — Toggle context panel
+      if ((e.key === "i" || e.key === "I") && e.shiftKey) {
+        e.preventDefault();
+        setContextPanelOpen(prev => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeProjectId, activeTabId, extracting, loadingChat]);
+
   return (
     <div className="flex h-screen" data-testid="workspace-container">
       {/* Sidebar */}
