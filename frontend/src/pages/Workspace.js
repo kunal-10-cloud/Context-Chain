@@ -398,7 +398,7 @@ export default function Workspace() {
       // Cmd+N — New session (default model gpt-5.2)
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        if (activeProjectId) handleCreateSession("gpt-5.2");
+        if (activeProjectId) handleCreateSession("claude-sonnet-4.5");
         return;
       }
 

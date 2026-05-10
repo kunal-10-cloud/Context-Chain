@@ -24,7 +24,7 @@ export default function Sidebar({
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
-  const [newSessionModel, setNewSessionModel] = useState("gpt-5.2");
+  const [newSessionModel, setNewSessionModel] = useState("claude-sonnet-4.5");
 
   const handleCreateProject = () => {
     if (!newProjectName.trim()) return;

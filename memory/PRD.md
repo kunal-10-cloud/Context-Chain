@@ -37,6 +37,11 @@ A unified AI workspace where users chat with multiple AI models (GPT 5.2, GPT-4o
 - [x] **Keyboard shortcuts**: Cmd/Ctrl+N new session, Cmd/Ctrl+W close tab, Cmd/Ctrl+E extract insights, Cmd/Ctrl+B toggle sidebar, Cmd/Ctrl+Shift+I toggle context panel
 - [x] **Multi-line textarea** with Enter to send, Shift+Enter for newline, auto-expanding height
 - [x] Project creation/deletion, session creation/deletion
+- [x] **Multi-Agent Discussion mode**: Multiple AI models discuss/critique each other's responses in one thread
+- [x] **Agent Pipeline mode**: Sequential chain where each model processes the previous model's output (draft → review → finalize)
+- [x] Multi-agent SSE streaming with per-agent identification (colored badges, step numbers)
+- [x] NewSessionDialog for configuring multi-agent sessions (mode selector + agent picker with order preview)
+- [x] Session list shows DIS/PIP badges for multi-agent sessions
 - [x] Markdown rendering in AI responses
 
 ## Prioritized Backlog

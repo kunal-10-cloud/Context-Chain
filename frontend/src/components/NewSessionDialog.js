@@ -35,7 +35,7 @@ const PIPELINE_LABELS = ["Drafter", "Reviewer", "Finalizer", "Quality Checker", 
 
 export default function NewSessionDialog({ open, onOpenChange, onCreateSession }) {
   const [mode, setMode] = useState("discussion");
-  const [selectedAgents, setSelectedAgents] = useState(["gpt-5.2", "claude-sonnet-4.5"]);
+  const [selectedAgents, setSelectedAgents] = useState(["claude-sonnet-4.5", "claude-opus-4.5"]);
   const [title, setTitle] = useState("");
 
   const toggleAgent = (key) => {

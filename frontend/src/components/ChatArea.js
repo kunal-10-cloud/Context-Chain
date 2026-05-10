@@ -121,7 +121,7 @@ export default function ChatArea({
             <TooltipTrigger asChild>
               <button
                 data-testid="new-tab-btn"
-                onClick={() => onCreateSession("gpt-5.2")}
+                onClick={() => onCreateSession("claude-sonnet-4.5")}
                 className="px-3 py-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors shrink-0"
               >
                 <Plus className="w-4 h-4" />
