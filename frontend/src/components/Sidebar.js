@@ -61,7 +61,7 @@ export default function Sidebar({
         {/* Header */}
         <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
           <h1 className="font-heading font-black text-lg tracking-tighter text-zinc-900" data-testid="app-title">
-            Context Hub
+            Persistent AI
           </h1>
           <button
             data-testid="collapse-sidebar-btn"
