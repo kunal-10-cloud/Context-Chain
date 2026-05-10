@@ -85,6 +85,67 @@ export const sendMessageStream = (sessionId, content, onChunk, onDone, onError) 
   return controller; // caller can abort
 };
 
+// Multi-Agent Chat Streaming (SSE)
+export const sendMultiAgentStream = (sessionId, content, callbacks) => {
+  const controller = new AbortController();
+  const { onAgentStart, onChunk, onAgentDone, onDone, onError } = callbacks;
+
+  fetch(`${API}/chat/multi-stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, content }),
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: "Stream failed" }));
+        onError(err.detail || "Stream failed");
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "agent_start") {
+                onAgentStart(event);
+              } else if (event.type === "chunk") {
+                onChunk(event.content, event.agent);
+              } else if (event.type === "agent_done") {
+                onAgentDone(event);
+              } else if (event.type === "done") {
+                onDone();
+              } else if (event.type === "error" || event.type === "agent_error") {
+                onError(event.detail);
+              }
+            } catch (e) {
+              // skip
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError(err.message || "Stream connection failed");
+      }
+    });
+
+  return controller;
+};
+
 // Intelligence
 export const extractInsights = (sessionId) =>
   api.post(`/sessions/${sessionId}/extract`).then(r => r.data);

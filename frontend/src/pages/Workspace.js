@@ -3,10 +3,11 @@ import { toast } from "sonner";
 import Sidebar from "@/components/Sidebar";
 import ChatArea from "@/components/ChatArea";
 import ContextPanel from "@/components/ContextPanel";
+import NewSessionDialog from "@/components/NewSessionDialog";
 import {
   fetchProjects, createProject, deleteProject,
   fetchSessions, createSession, deleteSession,
-  fetchMessages, sendMessageStream,
+  fetchMessages, sendMessageStream, sendMultiAgentStream,
   extractInsights, fetchIntelligence,
   getAvailableContext, injectContext,
 } from "@/hooks/useApi";
@@ -31,6 +32,7 @@ export default function Workspace() {
   const [extracting, setExtracting] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(true);
+  const [showMultiSessionDialog, setShowMultiSessionDialog] = useState(false);
   const initRef = useRef(false);
 
   // Load projects on mount
@@ -128,6 +130,27 @@ export default function Workspace() {
     }
   };
 
+  const handleCreateMultiSession = async (mode, agents, title) => {
+    if (!activeProjectId) {
+      toast.error("Select or create a project first");
+      return;
+    }
+    try {
+      const session = await createSession({
+        project_id: activeProjectId,
+        title,
+        model: agents[0],
+        mode,
+        agents,
+      });
+      setSessions(prev => [session, ...prev]);
+      openSessionTab(session);
+      toast.success(`${mode === "discussion" ? "Discussion" : "Pipeline"} session created`);
+    } catch (e) {
+      toast.error("Failed to create multi-agent session");
+    }
+  };
+
   const handleDeleteSession = async (sessionId) => {
     try {
       await deleteSession(sessionId);
@@ -147,7 +170,13 @@ export default function Workspace() {
         return prev;
       }
       setActiveTabId(session.id);
-      return [...prev, { sessionId: session.id, title: session.title, model: session.model }];
+      return [...prev, {
+        sessionId: session.id,
+        title: session.title,
+        model: session.model,
+        mode: session.mode || "single",
+        agents: session.agents || [session.model],
+      }];
     });
     // Load messages if not cached
     if (!messagesCache[session.id]) {
@@ -183,6 +212,7 @@ export default function Workspace() {
     if (!tab) return;
 
     const currentTabId = activeTabId;
+    const isMultiAgent = tab.mode === "discussion" || tab.mode === "pipeline";
 
     // Optimistic user message
     const userMsg = {
@@ -190,84 +220,145 @@ export default function Workspace() {
       session_id: currentTabId,
       role: "user",
       content,
-      model: tab.model,
+      model: "user",
       created_at: new Date().toISOString(),
-    };
-
-    // Placeholder assistant message for streaming
-    const streamingMsgId = `streaming-${Date.now()}`;
-    const streamingMsg = {
-      id: streamingMsgId,
-      session_id: currentTabId,
-      role: "assistant",
-      content: "",
-      model: tab.model,
-      created_at: new Date().toISOString(),
-      isStreaming: true,
     };
 
     setMessagesCache(prev => ({
       ...prev,
-      [currentTabId]: [...(prev[currentTabId] || []), userMsg, streamingMsg],
+      [currentTabId]: [...(prev[currentTabId] || []), userMsg],
     }));
 
     setLoadingChat(true);
-    let finalMessageId = null;
 
-    streamControllerRef.current = sendMessageStream(
-      currentTabId,
-      content,
-      // onChunk
-      (chunk, messageId) => {
-        if (messageId && !chunk) {
-          // start event - store the real message ID
-          finalMessageId = messageId;
-          return;
-        }
-        setMessagesCache(prev => {
-          const msgs = prev[currentTabId] || [];
-          return {
-            ...prev,
-            [currentTabId]: msgs.map(m =>
-              m.id === streamingMsgId
-                ? { ...m, content: m.content + chunk }
-                : m
-            ),
+    if (isMultiAgent) {
+      // Multi-agent streaming
+      let currentStreamId = null;
+
+      streamControllerRef.current = sendMultiAgentStream(currentTabId, content, {
+        onAgentStart: (event) => {
+          // Create a new streaming placeholder for this agent
+          currentStreamId = `streaming-${event.agent}-${Date.now()}`;
+          const agentMsg = {
+            id: currentStreamId,
+            session_id: currentTabId,
+            role: "assistant",
+            content: "",
+            model: event.agent,
+            agent_step: event.step,
+            created_at: new Date().toISOString(),
+            isStreaming: true,
           };
-        });
-      },
-      // onDone
-      (messageId) => {
-        // Finalize: replace temp IDs with real ones and mark as not streaming
-        setMessagesCache(prev => {
-          const msgs = (prev[currentTabId] || []).map(m => {
-            if (m.id === streamingMsgId) {
-              return { ...m, id: messageId || finalMessageId || streamingMsgId, isStreaming: false };
-            }
-            if (m.id === userMsg.id) {
-              return { ...m, id: m.id.replace('temp-', 'usr-') };
-            }
-            return m;
+          setMessagesCache(prev => ({
+            ...prev,
+            [currentTabId]: [...(prev[currentTabId] || []), agentMsg],
+          }));
+        },
+        onChunk: (chunk, agent) => {
+          if (!currentStreamId) return;
+          setMessagesCache(prev => {
+            const msgs = prev[currentTabId] || [];
+            return {
+              ...prev,
+              [currentTabId]: msgs.map(m =>
+                m.id === currentStreamId
+                  ? { ...m, content: m.content + chunk }
+                  : m
+              ),
+            };
           });
-          return { ...prev, [currentTabId]: msgs };
-        });
-        setLoadingChat(false);
-        streamControllerRef.current = null;
-      },
-      // onError
-      (errorMsg) => {
-        toast.error(errorMsg || "Failed to send message");
-        // Remove streaming message on error
-        setMessagesCache(prev => ({
-          ...prev,
-          [currentTabId]: (prev[currentTabId] || []).filter(
-            m => m.id !== streamingMsgId
-          ),
-        }));
-        setLoadingChat(false);
-        streamControllerRef.current = null;
-      }
-    );
+        },
+        onAgentDone: (event) => {
+          // Finalize this agent's message
+          setMessagesCache(prev => {
+            const msgs = (prev[currentTabId] || []).map(m =>
+              m.id === currentStreamId
+                ? { ...m, id: event.message_id, isStreaming: false }
+                : m
+            );
+            return { ...prev, [currentTabId]: msgs };
+          });
+          currentStreamId = null;
+        },
+        onDone: () => {
+          setLoadingChat(false);
+          streamControllerRef.current = null;
+        },
+        onError: (errorMsg) => {
+          toast.error(errorMsg || "Multi-agent chat failed");
+          setLoadingChat(false);
+          streamControllerRef.current = null;
+        },
+      });
+    } else {
+      // Single-agent streaming (existing logic)
+      const streamingMsgId = `streaming-${Date.now()}`;
+      const streamingMsg = {
+        id: streamingMsgId,
+        session_id: currentTabId,
+        role: "assistant",
+        content: "",
+        model: tab.model,
+        created_at: new Date().toISOString(),
+        isStreaming: true,
+      };
+
+      setMessagesCache(prev => ({
+        ...prev,
+        [currentTabId]: [...(prev[currentTabId] || []), streamingMsg],
+      }));
+
+      let finalMessageId = null;
+
+      streamControllerRef.current = sendMessageStream(
+        currentTabId,
+        content,
+        (chunk, messageId) => {
+          if (messageId && !chunk) {
+            finalMessageId = messageId;
+            return;
+          }
+          setMessagesCache(prev => {
+            const msgs = prev[currentTabId] || [];
+            return {
+              ...prev,
+              [currentTabId]: msgs.map(m =>
+                m.id === streamingMsgId
+                  ? { ...m, content: m.content + chunk }
+                  : m
+              ),
+            };
+          });
+        },
+        (messageId) => {
+          setMessagesCache(prev => {
+            const msgs = (prev[currentTabId] || []).map(m => {
+              if (m.id === streamingMsgId) {
+                return { ...m, id: messageId || finalMessageId || streamingMsgId, isStreaming: false };
+              }
+              if (m.id === userMsg.id) {
+                return { ...m, id: m.id.replace('temp-', 'usr-') };
+              }
+              return m;
+            });
+            return { ...prev, [currentTabId]: msgs };
+          });
+          setLoadingChat(false);
+          streamControllerRef.current = null;
+        },
+        (errorMsg) => {
+          toast.error(errorMsg || "Failed to send message");
+          setMessagesCache(prev => ({
+            ...prev,
+            [currentTabId]: (prev[currentTabId] || []).filter(
+              m => m.id !== streamingMsgId
+            ),
+          }));
+          setLoadingChat(false);
+          streamControllerRef.current = null;
+        }
+      );
+    }
   };
 
   const handleExtractInsights = async () => {
@@ -363,6 +454,7 @@ export default function Workspace() {
         onSelectSession={openSessionTab}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
+        onOpenMultiSession={() => setShowMultiSessionDialog(true)}
         models={MODELS}
       />
 
@@ -407,6 +499,13 @@ export default function Workspace() {
           CONTEXT
         </button>
       )}
+
+      {/* Multi-Agent Session Dialog */}
+      <NewSessionDialog
+        open={showMultiSessionDialog}
+        onOpenChange={setShowMultiSessionDialog}
+        onCreateSession={handleCreateMultiSession}
+      />
     </div>
   );
 }

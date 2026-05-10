@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Plus, Sparkles, Link2, Send, Loader2 } from "lucide-react";
+import { X, Plus, Sparkles, Link2, Send, Loader2, Users, ArrowRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -48,6 +48,7 @@ export default function ChatArea({
   };
 
   const modelInfo = activeTab ? MODEL_INFO[activeTab.model] : null;
+  const isMultiAgent = activeTab && (activeTab.mode === "discussion" || activeTab.mode === "pipeline");
 
   // Empty state
   if (openTabs.length === 0) {
@@ -131,19 +132,48 @@ export default function ChatArea({
         </div>
 
         {/* Model Info Bar */}
-        {modelInfo && (
+        {activeTab && (
           <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-200 bg-white">
             <div className="flex items-center gap-2">
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: modelInfo.color }}
-              />
-              <span className="text-sm font-medium text-zinc-900" data-testid="active-model-name">
-                {modelInfo.name}
-              </span>
-              <span className="font-mono text-[10px] text-zinc-400 border border-zinc-200 px-1.5 py-0.5">
-                {modelInfo.provider}
-              </span>
+              {isMultiAgent ? (
+                <>
+                  <Users className="w-3.5 h-3.5 text-[#002FA7]" />
+                  <span className="text-sm font-medium text-zinc-900" data-testid="active-model-name">
+                    {activeTab.mode === "discussion" ? "Discussion" : "Pipeline"}
+                  </span>
+                  <div className="flex items-center gap-1 ml-1">
+                    {(activeTab.agents || []).map((agentKey, i) => {
+                      const info = MODEL_INFO[agentKey];
+                      return (
+                        <div key={agentKey} className="flex items-center gap-0.5">
+                          <span
+                            className="text-[10px] font-mono px-1.5 py-0.5 text-white"
+                            style={{ backgroundColor: info?.color || "#71717A" }}
+                          >
+                            {info?.name || agentKey}
+                          </span>
+                          {i < (activeTab.agents?.length || 0) - 1 && (
+                            <ArrowRight className="w-2.5 h-2.5 text-zinc-400" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: modelInfo?.color }}
+                  />
+                  <span className="text-sm font-medium text-zinc-900" data-testid="active-model-name">
+                    {modelInfo?.name}
+                  </span>
+                  <span className="font-mono text-[10px] text-zinc-400 border border-zinc-200 px-1.5 py-0.5">
+                    {modelInfo?.provider}
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-1.5">
               <Tooltip>

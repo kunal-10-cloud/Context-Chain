@@ -50,6 +50,8 @@ class SessionCreate(BaseModel):
     project_id: str
     title: str
     model: str
+    mode: str = "single"  # "single", "discussion", "pipeline"
+    agents: List[str] = []  # list of model keys for multi-agent modes
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -108,8 +110,18 @@ async def delete_project(project_id: str):
 # --- Session Endpoints ---
 @api_router.post("/sessions")
 async def create_session(data: SessionCreate):
-    if data.model not in MODEL_MAP:
-        raise HTTPException(status_code=400, detail=f"Invalid model: {data.model}")
+    valid_modes = ("single", "discussion", "pipeline")
+    if data.mode not in valid_modes:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {data.mode}")
+    if data.mode == "single":
+        if data.model not in MODEL_MAP:
+            raise HTTPException(status_code=400, detail=f"Invalid model: {data.model}")
+    else:
+        if len(data.agents) < 2:
+            raise HTTPException(status_code=400, detail="Multi-agent modes require at least 2 agents")
+        for a in data.agents:
+            if a not in MODEL_MAP:
+                raise HTTPException(status_code=400, detail=f"Invalid agent model: {a}")
     # Verify project exists
     project = await db.projects.find_one({"id": data.project_id}, {"_id": 0})
     if not project:
@@ -119,7 +131,9 @@ async def create_session(data: SessionCreate):
         "id": str(uuid.uuid4()),
         "project_id": data.project_id,
         "title": data.title,
-        "model": data.model,
+        "model": data.model if data.mode == "single" else data.agents[0],
+        "mode": data.mode,
+        "agents": data.agents if data.mode != "single" else [data.model],
         "created_at": now,
         "updated_at": now,
         "message_count": 0,
@@ -357,6 +371,180 @@ async def chat_stream(data: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --- Multi-Agent Chat Streaming (SSE) ---
+DISCUSSION_ROLES = [
+    "You are the lead responder. Provide a thorough, well-structured answer to the user's question.",
+    "You are a critical reviewer. Read the previous responses carefully, then provide your own perspective — agree, disagree, add nuance, or offer an alternative approach. Be constructive but honest.",
+    "You are the synthesizer. Review all previous responses, identify the strongest points from each, resolve any contradictions, and provide a final unified answer.",
+    "You are a specialist. Add any domain-specific insights, edge cases, or practical considerations the other agents may have missed.",
+    "You are the devil's advocate. Challenge assumptions in the prior responses and explore the problem from an unconventional angle.",
+]
+
+PIPELINE_ROLES = [
+    "You are the drafter. Create an initial, comprehensive response to the user's request.",
+    "You are the reviewer. Improve the draft below — fix errors, strengthen arguments, improve clarity and structure. Output the improved version.",
+    "You are the finalizer. Polish the reviewed content below into a high-quality final output. Ensure it's well-organized, accurate, and actionable.",
+    "You are the quality checker. Review the finalized content, fix any remaining issues, and ensure it fully addresses the original request.",
+    "You are the editor. Make final editorial passes on grammar, tone, and formatting.",
+]
+
+
+@api_router.post("/chat/multi-stream")
+async def chat_multi_stream(data: ChatRequest):
+    """SSE streaming for multi-agent discussion and pipeline modes."""
+    session = await db.sessions.find_one({"id": data.session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    mode = session.get("mode", "single")
+    if mode == "single":
+        raise HTTPException(status_code=400, detail="Use /chat/stream for single-agent sessions")
+
+    agents = session.get("agents", [])
+    if len(agents) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 agents")
+
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+
+    # Save user message
+    now = datetime.now(timezone.utc).isoformat()
+    user_msg = {
+        "id": str(uuid.uuid4()),
+        "session_id": data.session_id,
+        "project_id": session["project_id"],
+        "role": "user",
+        "content": data.content,
+        "model": "user",
+        "created_at": now,
+    }
+    await db.messages.insert_one(user_msg)
+
+    # Get conversation history
+    history = await db.messages.find(
+        {"session_id": data.session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+
+    # Build base context from previous messages (excluding latest user msg)
+    base_context = ""
+    if session.get("context_injected"):
+        base_context += f"Injected context:\n{session['context_injected']}\n\n"
+    prev_msgs = [m for m in history[:-1]]
+    if prev_msgs:
+        parts = []
+        for m in prev_msgs:
+            label = "User" if m["role"] == "user" else f"Agent ({m.get('model', '?')})"
+            parts.append(f"{label}: {m['content']}")
+        base_context += "Previous conversation:\n" + "\n\n".join(parts)
+
+    roles = DISCUSSION_ROLES if mode == "discussion" else PIPELINE_ROLES
+
+    async def multi_event_generator():
+        try:
+            yield f"data: {json.dumps({'type': 'multi_start', 'mode': mode, 'agents': agents})}\n\n"
+
+            previous_agent_output = ""
+
+            for step, agent_key in enumerate(agents):
+                if agent_key not in MODEL_MAP:
+                    continue
+                provider, model_name = MODEL_MAP[agent_key]
+                role_prompt = roles[step] if step < len(roles) else roles[-1]
+                msg_id = str(uuid.uuid4())
+
+                # Build agent-specific system message
+                if mode == "discussion":
+                    system_msg = f"{role_prompt}\n\nYou are {agent_key}."
+                    if base_context:
+                        system_msg += f"\n\n{base_context}"
+                    if previous_agent_output:
+                        system_msg += f"\n\nPrevious agent responses in this round:\n{previous_agent_output}"
+                    prompt = data.content
+                else:  # pipeline
+                    system_msg = f"{role_prompt}\n\nYou are {agent_key}."
+                    if base_context:
+                        system_msg += f"\n\n{base_context}"
+                    if step == 0:
+                        prompt = data.content
+                    else:
+                        prompt = f"Original request: {data.content}\n\nPrevious agent's output:\n{previous_agent_output}\n\nNow apply your role and improve/process this."
+
+                # Signal agent start
+                yield f"data: {json.dumps({'type': 'agent_start', 'agent': agent_key, 'step': step + 1, 'total_steps': len(agents), 'message_id': msg_id})}\n\n"
+
+                try:
+                    llm = LlmChat(
+                        api_key=api_key,
+                        session_id=str(uuid.uuid4()),
+                        system_message=system_msg,
+                    ).with_model(provider, model_name)
+
+                    response = await llm.send_message(UserMessage(text=prompt))
+
+                    # Stream response word-by-word
+                    words = response.split(' ')
+                    chunk_size = 3
+                    for i in range(0, len(words), chunk_size):
+                        chunk = ' '.join(words[i:i + chunk_size])
+                        if i > 0:
+                            chunk = ' ' + chunk
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk, 'agent': agent_key})}\n\n"
+                        await asyncio.sleep(0.02)
+
+                    # Save agent message to DB
+                    agent_msg = {
+                        "id": msg_id,
+                        "session_id": data.session_id,
+                        "project_id": session["project_id"],
+                        "role": "assistant",
+                        "content": response,
+                        "model": agent_key,
+                        "agent_step": step + 1,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    await db.messages.insert_one(agent_msg)
+
+                    # Signal agent done
+                    yield f"data: {json.dumps({'type': 'agent_done', 'agent': agent_key, 'message_id': msg_id, 'step': step + 1})}\n\n"
+
+                    # Update context for next agent
+                    if mode == "discussion":
+                        previous_agent_output += f"\n{agent_key}: {response}\n"
+                    else:
+                        previous_agent_output = response
+
+                except Exception as e:
+                    logger.error(f"Multi-agent error ({agent_key}): {e}")
+                    yield f"data: {json.dumps({'type': 'agent_error', 'agent': agent_key, 'detail': str(e)})}\n\n"
+
+            # Update session
+            count = await db.messages.count_documents({"session_id": data.session_id})
+            await db.sessions.update_one(
+                {"id": data.session_id},
+                {"$set": {"message_count": count, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
+            should_extract = count >= 4
+            yield f"data: {json.dumps({'type': 'done', 'should_extract': should_extract})}\n\n"
+
+            if should_extract:
+                await run_extraction(data.session_id)
+
+        except Exception as e:
+            logger.error(f"Multi-agent stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+
+    return StreamingResponse(
+        multi_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 # --- Intelligence Extraction ---
 async def run_extraction(session_id: str):

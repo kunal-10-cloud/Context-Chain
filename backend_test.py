@@ -10,6 +10,8 @@ class ContextHubAPITester:
         self.tests_passed = 0
         self.project_id = None
         self.session_id = None
+        self.discussion_session_id = None
+        self.pipeline_session_id = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, params=None):
         """Run a single API test"""
@@ -311,6 +313,162 @@ class ContextHubAPITester:
             return True
         return False
 
+    def test_create_discussion_session(self):
+        """Test creating a multi-agent discussion session"""
+        if not self.project_id:
+            print("❌ No project ID available for discussion session creation")
+            return False
+            
+        test_data = {
+            "project_id": self.project_id,
+            "title": "Test Discussion Session",
+            "model": "claude-sonnet-4.5",  # Will be overridden by agents[0]
+            "mode": "discussion",
+            "agents": ["claude-sonnet-4.5", "claude-opus-4.5"]
+        }
+        success, response = self.run_test(
+            "Create Discussion Session",
+            "POST",
+            "sessions",
+            200,
+            data=test_data
+        )
+        if success and 'id' in response:
+            self.discussion_session_id = response['id']
+            print(f"   Created discussion session ID: {self.discussion_session_id}")
+            # Verify mode and agents
+            if response.get('mode') == 'discussion' and len(response.get('agents', [])) == 2:
+                print(f"   ✅ Mode: {response['mode']}, Agents: {response['agents']}")
+                return True
+            else:
+                print(f"   ❌ Unexpected response: mode={response.get('mode')}, agents={response.get('agents')}")
+                return False
+        return False
+
+    def test_create_pipeline_session(self):
+        """Test creating a multi-agent pipeline session"""
+        if not self.project_id:
+            print("❌ No project ID available for pipeline session creation")
+            return False
+            
+        test_data = {
+            "project_id": self.project_id,
+            "title": "Test Pipeline Session",
+            "model": "claude-sonnet-4.5",
+            "mode": "pipeline",
+            "agents": ["claude-sonnet-4.5", "claude-opus-4.5"]
+        }
+        success, response = self.run_test(
+            "Create Pipeline Session",
+            "POST",
+            "sessions",
+            200,
+            data=test_data
+        )
+        if success and 'id' in response:
+            self.pipeline_session_id = response['id']
+            print(f"   Created pipeline session ID: {self.pipeline_session_id}")
+            # Verify mode and agents
+            if response.get('mode') == 'pipeline' and len(response.get('agents', [])) == 2:
+                print(f"   ✅ Mode: {response['mode']}, Agents: {response['agents']}")
+                return True
+            else:
+                print(f"   ❌ Unexpected response: mode={response.get('mode')}, agents={response.get('agents')}")
+                return False
+        return False
+
+    def test_multi_agent_stream(self):
+        """Test multi-agent SSE streaming endpoint"""
+        if not hasattr(self, 'discussion_session_id') or not self.discussion_session_id:
+            print("❌ No discussion session ID available for multi-agent streaming")
+            return False
+            
+        url = f"{self.base_url}/api/chat/multi-stream"
+        headers = {'Content-Type': 'application/json'}
+        test_data = {
+            "session_id": self.discussion_session_id,
+            "content": "What is 2+2? Keep it very brief."
+        }
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing Multi-Agent SSE Streaming...")
+        print(f"   URL: {url}")
+        
+        try:
+            response = requests.post(url, json=test_data, headers=headers, stream=True, timeout=120)
+            
+            if response.status_code != 200:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                try:
+                    error = response.json()
+                    print(f"   Error: {error}")
+                except:
+                    print(f"   Error: {response.text}")
+                return False
+                
+            # Parse SSE events
+            events_received = []
+            agent_responses = {}
+            current_agent = None
+            
+            for line in response.iter_lines(decode_unicode=True):
+                if line.startswith('data: '):
+                    try:
+                        event_data = json.loads(line[6:])
+                        event_type = event_data['type']
+                        events_received.append(event_type)
+                        
+                        if event_type == 'multi_start':
+                            print(f"   📡 Multi-agent stream started")
+                            print(f"      Mode: {event_data.get('mode')}, Agents: {event_data.get('agents')}")
+                        elif event_type == 'agent_start':
+                            current_agent = event_data['agent']
+                            agent_responses[current_agent] = []
+                            print(f"   🤖 Agent {current_agent} started (step {event_data['step']}/{event_data['total_steps']})")
+                        elif event_type == 'chunk':
+                            if current_agent:
+                                agent_responses[current_agent].append(event_data['content'])
+                        elif event_type == 'agent_done':
+                            agent = event_data['agent']
+                            content = ''.join(agent_responses.get(agent, []))
+                            print(f"   ✅ Agent {agent} done - Response: {content[:80]}...")
+                        elif event_type == 'done':
+                            print(f"   ✅ Multi-agent stream completed")
+                            break
+                        elif event_type == 'error' or event_type == 'agent_error':
+                            print(f"   ❌ Stream error: {event_data.get('detail', 'Unknown error')}")
+                            return False
+                            
+                    except json.JSONDecodeError:
+                        continue
+                        
+            # Validate multi-agent streaming behavior
+            expected_events = ['multi_start', 'agent_start', 'chunk', 'agent_done', 'done']
+            success = (
+                'multi_start' in events_received and 
+                'agent_start' in events_received and 
+                'chunk' in events_received and 
+                'agent_done' in events_received and
+                'done' in events_received and
+                len(agent_responses) == 2  # Should have 2 agents
+            )
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Received responses from {len(agent_responses)} agents")
+                for agent, chunks in agent_responses.items():
+                    print(f"   Agent {agent}: {len(chunks)} chunks")
+                return True
+            else:
+                print(f"❌ Failed - Events: {set(events_received)}, Agents: {len(agent_responses)}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+
 def main():
     print("🚀 Starting Context Hub API Tests...")
     print("=" * 50)
@@ -330,6 +488,9 @@ def main():
         ("Get Messages", tester.test_get_messages),
         ("Extract Intelligence", tester.test_extract_intelligence),
         ("Get Intelligence", tester.test_get_intelligence),
+        ("Create Discussion Session", tester.test_create_discussion_session),
+        ("Create Pipeline Session", tester.test_create_pipeline_session),
+        ("Multi-Agent SSE Streaming", tester.test_multi_agent_stream),
     ]
     
     failed_tests = []

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, FolderOpen, Trash2, MessageSquarePlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, FolderOpen, Trash2, MessageSquarePlus, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -19,7 +19,7 @@ const MODEL_COLORS = {
 export default function Sidebar({
   projects, activeProjectId, sessions, collapsed,
   onToggleCollapse, onSelectProject, onCreateProject, onDeleteProject,
-  onSelectSession, onCreateSession, onDeleteSession, models,
+  onSelectSession, onCreateSession, onDeleteSession, onOpenMultiSession, models,
 }) {
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -145,10 +145,19 @@ export default function Sidebar({
               data-testid="new-session-btn"
               onClick={() => onCreateSession(newSessionModel)}
               className="bg-[#002FA7] text-white px-2 h-7 text-xs font-medium hover:bg-[#00227A] transition-colors flex items-center gap-1"
+              title="New single-agent session"
             >
               <MessageSquarePlus className="w-3 h-3" />
             </button>
           </div>
+          <button
+            data-testid="new-multi-agent-btn"
+            onClick={onOpenMultiSession}
+            className="w-full flex items-center gap-2 px-2 py-1.5 mb-2 border border-dashed border-zinc-300 text-xs text-zinc-500 hover:border-[#002FA7] hover:text-[#002FA7] transition-colors"
+          >
+            <Users className="w-3 h-3" />
+            Multi-Agent Session
+          </button>
 
           <ScrollArea className="flex-1">
             {sessions.length === 0 ? (
@@ -163,6 +172,11 @@ export default function Sidebar({
                 >
                   <span className={`w-2 h-2 rounded-full shrink-0 ${MODEL_COLORS[s.model] || "bg-zinc-400"}`} />
                   <span className="truncate flex-1 text-zinc-700">{s.title}</span>
+                  {s.mode && s.mode !== "single" && (
+                    <span className="font-mono text-[9px] text-[#002FA7] border border-[#002FA7] px-1 py-0 shrink-0">
+                      {s.mode === "discussion" ? "DIS" : "PIP"}
+                    </span>
+                  )}
                   <span className="font-mono text-[10px] text-zinc-400 shrink-0">{s.message_count || 0}</span>
                   <button
                     data-testid={`delete-session-${s.id}`}

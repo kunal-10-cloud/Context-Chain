@@ -2,8 +2,34 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { User } from "lucide-react";
 
-export default function ChatMessage({ message, modelInfo }) {
+const MODEL_INFO = {
+  "gpt-5.2": { name: "GPT 5.2", color: "#10B981" },
+  "gpt-4o": { name: "GPT-4o", color: "#14B8A6" },
+  "claude-sonnet-4.5": { name: "Claude Sonnet 4.5", color: "#F97316" },
+  "claude-opus-4.5": { name: "Claude Opus 4.5", color: "#EF4444" },
+  "gemini-3-flash": { name: "Gemini 3 Flash", color: "#3B82F6" },
+};
+
+const STEP_LABELS = {
+  1: "Lead",
+  2: "Reviewer",
+  3: "Synthesizer",
+  4: "Specialist",
+  5: "Advocate",
+};
+
+const PIPELINE_LABELS = {
+  1: "Drafter",
+  2: "Reviewer",
+  3: "Finalizer",
+  4: "QA",
+  5: "Editor",
+};
+
+export default function ChatMessage({ message, modelInfo: passedModelInfo }) {
   const isUser = message.role === "user";
+  const agentInfo = MODEL_INFO[message.model] || passedModelInfo;
+  const hasStep = message.agent_step && message.agent_step > 0;
 
   return (
     <div
@@ -11,7 +37,7 @@ export default function ChatMessage({ message, modelInfo }) {
       className={`flex items-start gap-3 p-3 transition-colors ${
         isUser ? "bg-zinc-50" : "bg-white border-l-2"
       }`}
-      style={!isUser ? { borderLeftColor: modelInfo?.color || "#002FA7" } : {}}
+      style={!isUser ? { borderLeftColor: agentInfo?.color || "#002FA7" } : {}}
     >
       {/* Avatar */}
       {isUser ? (
@@ -20,15 +46,33 @@ export default function ChatMessage({ message, modelInfo }) {
         </div>
       ) : (
         <div
-          className="w-7 h-7 flex items-center justify-center text-white text-xs font-bold shrink-0"
-          style={{ backgroundColor: modelInfo?.color || "#002FA7" }}
+          className="w-7 h-7 flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+          style={{ backgroundColor: agentInfo?.color || "#002FA7" }}
         >
-          AI
+          {hasStep ? message.agent_step : "AI"}
         </div>
       )}
 
       {/* Content */}
       <div className="flex-1 min-w-0 text-sm leading-relaxed text-zinc-800">
+        {/* Agent label for multi-agent messages */}
+        {!isUser && agentInfo && (
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span
+              className="text-[10px] font-mono font-medium px-1.5 py-0.5 text-white"
+              style={{ backgroundColor: agentInfo.color }}
+              data-testid={`agent-badge-${message.id}`}
+            >
+              {agentInfo.name || message.model}
+            </span>
+            {hasStep && (
+              <span className="text-[10px] font-mono text-zinc-400">
+                Step {message.agent_step}
+              </span>
+            )}
+          </div>
+        )}
+
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
