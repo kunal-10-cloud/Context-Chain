@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const MODEL_COLORS = {
-  "gpt-5.2": "bg-emerald-500",
-  "gpt-4o": "bg-teal-500",
+  "claude-opus-4.7": "bg-red-600",
+  "claude-sonnet-4.6": "bg-orange-600",
+  "claude-opus-4.6": "bg-rose-600",
   "claude-sonnet-4.5": "bg-orange-500",
   "claude-opus-4.5": "bg-red-500",
+  "claude-haiku-4.5": "bg-amber-500",
+  "gpt-5.2": "bg-emerald-500",
+  "gpt-4o": "bg-teal-500",
   "gemini-3-flash": "bg-blue-500",
 };
 
@@ -24,7 +28,7 @@ export default function Sidebar({
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
-  const [newSessionModel, setNewSessionModel] = useState("claude-sonnet-4.5");
+  const [newSessionModel, setNewSessionModel] = useState("claude-opus-4.7");
 
   const handleCreateProject = () => {
     if (!newProjectName.trim()) return;

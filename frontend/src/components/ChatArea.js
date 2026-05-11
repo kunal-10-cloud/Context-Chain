@@ -7,10 +7,14 @@ import ChatMessage from "@/components/ChatMessage";
 import ContextInjectDialog from "@/components/ContextInjectDialog";
 
 const MODEL_INFO = {
-  "gpt-5.2": { name: "GPT 5.2", provider: "OpenAI", color: "#10B981" },
-  "gpt-4o": { name: "GPT-4o", provider: "OpenAI", color: "#14B8A6" },
+  "claude-opus-4.7": { name: "Claude Opus 4.7", provider: "Anthropic", color: "#DC2626" },
+  "claude-sonnet-4.6": { name: "Claude Sonnet 4.6", provider: "Anthropic", color: "#EA580C" },
+  "claude-opus-4.6": { name: "Claude Opus 4.6", provider: "Anthropic", color: "#E11D48" },
   "claude-sonnet-4.5": { name: "Claude Sonnet 4.5", provider: "Anthropic", color: "#F97316" },
   "claude-opus-4.5": { name: "Claude Opus 4.5", provider: "Anthropic", color: "#EF4444" },
+  "claude-haiku-4.5": { name: "Claude Haiku 4.5", provider: "Anthropic", color: "#F59E0B" },
+  "gpt-5.2": { name: "GPT 5.2", provider: "OpenAI", color: "#10B981" },
+  "gpt-4o": { name: "GPT-4o", provider: "OpenAI", color: "#14B8A6" },
   "gemini-3-flash": { name: "Gemini 3 Flash", provider: "Google", color: "#3B82F6" },
 };
 
@@ -121,7 +125,7 @@ export default function ChatArea({
             <TooltipTrigger asChild>
               <button
                 data-testid="new-tab-btn"
-                onClick={() => onCreateSession("claude-sonnet-4.5")}
+                onClick={() => onCreateSession("claude-opus-4.7")}
                 className="px-3 py-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors shrink-0"
               >
                 <Plus className="w-4 h-4" />

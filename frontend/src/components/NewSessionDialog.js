@@ -8,10 +8,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { MessageSquare, GitBranch, ArrowRight } from "lucide-react";
 
 const MODELS = [
-  { key: "gpt-5.2", name: "GPT 5.2", provider: "OpenAI", color: "#10B981" },
-  { key: "gpt-4o", name: "GPT-4o", provider: "OpenAI", color: "#14B8A6" },
+  { key: "claude-opus-4.7", name: "Claude Opus 4.7", provider: "Anthropic", color: "#DC2626" },
+  { key: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", provider: "Anthropic", color: "#EA580C" },
+  { key: "claude-opus-4.6", name: "Claude Opus 4.6", provider: "Anthropic", color: "#E11D48" },
   { key: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", provider: "Anthropic", color: "#F97316" },
   { key: "claude-opus-4.5", name: "Claude Opus 4.5", provider: "Anthropic", color: "#EF4444" },
+  { key: "claude-haiku-4.5", name: "Claude Haiku 4.5", provider: "Anthropic", color: "#F59E0B" },
+  { key: "gpt-5.2", name: "GPT 5.2", provider: "OpenAI", color: "#10B981" },
+  { key: "gpt-4o", name: "GPT-4o", provider: "OpenAI", color: "#14B8A6" },
   { key: "gemini-3-flash", name: "Gemini 3 Flash", provider: "Google", color: "#3B82F6" },
 ];
 
@@ -35,7 +39,7 @@ const PIPELINE_LABELS = ["Drafter", "Reviewer", "Finalizer", "Quality Checker", 
 
 export default function NewSessionDialog({ open, onOpenChange, onCreateSession }) {
   const [mode, setMode] = useState("discussion");
-  const [selectedAgents, setSelectedAgents] = useState(["claude-sonnet-4.5", "claude-opus-4.5"]);
+  const [selectedAgents, setSelectedAgents] = useState(["claude-opus-4.7", "claude-sonnet-4.6"]);
   const [title, setTitle] = useState("");
 
   const toggleAgent = (key) => {

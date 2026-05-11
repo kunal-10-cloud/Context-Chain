@@ -13,10 +13,14 @@ import {
 } from "@/hooks/useApi";
 
 const MODELS = [
-  { key: "gpt-5.2", name: "GPT 5.2", provider: "OpenAI" },
-  { key: "gpt-4o", name: "GPT-4o", provider: "OpenAI" },
+  { key: "claude-opus-4.7", name: "Claude Opus 4.7", provider: "Anthropic" },
+  { key: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", provider: "Anthropic" },
+  { key: "claude-opus-4.6", name: "Claude Opus 4.6", provider: "Anthropic" },
   { key: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", provider: "Anthropic" },
   { key: "claude-opus-4.5", name: "Claude Opus 4.5", provider: "Anthropic" },
+  { key: "claude-haiku-4.5", name: "Claude Haiku 4.5", provider: "Anthropic" },
+  { key: "gpt-5.2", name: "GPT 5.2", provider: "OpenAI" },
+  { key: "gpt-4o", name: "GPT-4o", provider: "OpenAI" },
   { key: "gemini-3-flash", name: "Gemini 3 Flash", provider: "Google" },
 ];
 
@@ -398,7 +402,7 @@ export default function Workspace() {
       // Cmd+N — New session (default model gpt-5.2)
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        if (activeProjectId) handleCreateSession("claude-sonnet-4.5");
+        if (activeProjectId) handleCreateSession("claude-opus-4.7");
         return;
       }
 

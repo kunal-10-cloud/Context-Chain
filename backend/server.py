@@ -34,10 +34,14 @@ logger = logging.getLogger(__name__)
 
 # Model mapping: display_key -> (provider, model_id)
 MODEL_MAP = {
-    "gpt-5.2": ("openai", "gpt-5.2"),
-    "gpt-4o": ("openai", "gpt-4o"),
+    "claude-opus-4.7": ("anthropic", "claude-opus-4-7"),
+    "claude-sonnet-4.6": ("anthropic", "claude-sonnet-4-6"),
+    "claude-opus-4.6": ("anthropic", "claude-opus-4-6"),
     "claude-sonnet-4.5": ("anthropic", "claude-sonnet-4-5-20250929"),
     "claude-opus-4.5": ("anthropic", "claude-opus-4-5-20251101"),
+    "claude-haiku-4.5": ("anthropic", "claude-haiku-4-5"),
+    "gpt-5.2": ("openai", "gpt-5.2"),
+    "gpt-4o": ("openai", "gpt-4o"),
     "gemini-3-flash": ("gemini", "gemini-3-flash-preview"),
 }
 
@@ -707,10 +711,14 @@ async def get_available_context(session_id: str):
 @api_router.get("/models")
 async def list_models():
     return [
-        {"key": "gpt-5.2", "name": "GPT 5.2", "provider": "OpenAI"},
-        {"key": "gpt-4o", "name": "GPT-4o", "provider": "OpenAI"},
+        {"key": "claude-opus-4.7", "name": "Claude Opus 4.7", "provider": "Anthropic"},
+        {"key": "claude-sonnet-4.6", "name": "Claude Sonnet 4.6", "provider": "Anthropic"},
+        {"key": "claude-opus-4.6", "name": "Claude Opus 4.6", "provider": "Anthropic"},
         {"key": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5", "provider": "Anthropic"},
         {"key": "claude-opus-4.5", "name": "Claude Opus 4.5", "provider": "Anthropic"},
+        {"key": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "provider": "Anthropic"},
+        {"key": "gpt-5.2", "name": "GPT 5.2", "provider": "OpenAI"},
+        {"key": "gpt-4o", "name": "GPT-4o", "provider": "OpenAI"},
         {"key": "gemini-3-flash", "name": "Gemini 3 Flash", "provider": "Google"},
     ]
 

@@ -3,10 +3,14 @@ import remarkGfm from "remark-gfm";
 import { User } from "lucide-react";
 
 const MODEL_INFO = {
-  "gpt-5.2": { name: "GPT 5.2", color: "#10B981" },
-  "gpt-4o": { name: "GPT-4o", color: "#14B8A6" },
+  "claude-opus-4.7": { name: "Claude Opus 4.7", color: "#DC2626" },
+  "claude-sonnet-4.6": { name: "Claude Sonnet 4.6", color: "#EA580C" },
+  "claude-opus-4.6": { name: "Claude Opus 4.6", color: "#E11D48" },
   "claude-sonnet-4.5": { name: "Claude Sonnet 4.5", color: "#F97316" },
   "claude-opus-4.5": { name: "Claude Opus 4.5", color: "#EF4444" },
+  "claude-haiku-4.5": { name: "Claude Haiku 4.5", color: "#F59E0B" },
+  "gpt-5.2": { name: "GPT 5.2", color: "#10B981" },
+  "gpt-4o": { name: "GPT-4o", color: "#14B8A6" },
   "gemini-3-flash": { name: "Gemini 3 Flash", color: "#3B82F6" },
 };
 
